@@ -171,6 +171,7 @@
                 <div class="toolbar-section">
                     <button class="btn" onclick="toggleSearchReplace()">🔍 Search</button>
                     <button class="btn btn-danger" onclick="deleteCurrentNote()" id="deleteBtn">🗑️ Delete</button>
+                    <button class="btn btn-success" onclick="manualSave()" id="saveBtn">💾 Save</button>
                     <button class="btn" onclick="togglePreview()">👁️ Preview</button>
                     <button class="btn" onclick="downloadNote()">💾 Download</button>
                     <button class="btn" onclick="exportHTML()">🌐 HTML</button>
@@ -244,9 +245,17 @@
         let isDarkMode = false;
         let isDistractionFree = false;
         let showOutline = false;
+        let hasUnsavedChanges = false;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('saveBtn').disabled = true;
+            // Load theme from localStorage
+            const savedTheme = localStorage.getItem('md_theme');
+            if (savedTheme === 'dark') {
+                toggleDarkMode();
+            }
+
             renderFileList();
             setupAutoSave();
             setupWordCount();
@@ -317,6 +326,11 @@
             updatePreview();
             updateWordCount();
             updateOutline();
+            
+            hasUnsavedChanges = false;
+            document.getElementById('saveBtn').disabled = true;
+            document.getElementById('saveBtn').textContent = '💾 Save';
+
             updateStatus(`Loaded: ${note.title}`);
         }
 
@@ -327,6 +341,12 @@
             if (note) {
                 note.title = document.getElementById('noteTitle').value || 'Untitled';
                 note.updatedAt = new Date().toISOString();
+                
+                hasUnsavedChanges = true;
+                const saveBtn = document.getElementById('saveBtn');
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Save Changes';
+
                 saveNotes();
                 renderFileList();
                 updateStatus('Title updated');
@@ -359,7 +379,7 @@
             updateStatus('Note deleted');
         }
 
-        function saveCurrentNote() {
+        function saveCurrentNote(isManual = false) {
             if (!currentNoteId) return;
             
             const note = notes.find(n => n.id === currentNoteId);
@@ -367,7 +387,26 @@
                 note.content = document.getElementById('editor').value;
                 note.updatedAt = new Date().toISOString();
                 saveNotes();
-                updateStatus('Auto-saved');
+
+                hasUnsavedChanges = false;
+                const saveBtn = document.getElementById('saveBtn');
+                saveBtn.disabled = true;
+
+                if (isManual) {
+                    saveBtn.textContent = '✅ Saved!';
+                    setTimeout(() => {
+                        saveBtn.textContent = '💾 Save';
+                    }, 2000);
+                    updateStatus('Note saved successfully');
+                } else {
+                    updateStatus('Auto-saved');
+                }
+            }
+        }
+
+        function manualSave() {
+            if (hasUnsavedChanges) {
+                saveCurrentNote(true);
             }
         }
 
@@ -381,6 +420,15 @@
             let timeout;
             
             editor.addEventListener('input', () => {
+                if (!currentNoteId) {
+                    createNewNote();
+                }
+
+                hasUnsavedChanges = true;
+                const saveBtn = document.getElementById('saveBtn');
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Save Changes';
+
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
                     saveCurrentNote();
@@ -459,7 +507,12 @@
                     replacement = `[${selectedText || 'link text'}](url)`;
                     break;
                 case 'image':
-                    replacement = `![${selectedText || 'alt text'}](image-url)`;
+                    const imageUrl = prompt('Enter image URL:');
+                    if (imageUrl) {
+                        replacement = `![${selectedText || 'alt text'}](${imageUrl})`;
+                    } else {
+                        return; // Do nothing if user cancels prompt
+                    }
                     break;
                 case 'header1':
                     replacement = `# ${selectedText || 'Header 1'}`;
@@ -651,13 +704,22 @@
         function toggleDarkMode() {
             isDarkMode = !isDarkMode;
             document.body.classList.toggle('dark-mode', isDarkMode);
+            localStorage.setItem('md_theme', isDarkMode ? 'dark' : 'light');
             updateStatus(isDarkMode ? 'Dark mode enabled' : 'Light mode enabled');
         }
 
         function toggleDistractionFree() {
             isDistractionFree = !isDistractionFree;
             document.body.classList.toggle('distraction-free', isDistractionFree);
-            updateStatus(isDistractionFree ? 'Focus mode enabled' : 'Focus mode disabled');
+            
+            const focusBtn = document.querySelector('button[onclick="toggleDistractionFree()"]');
+            if (isDistractionFree) {
+                focusBtn.textContent = 'Exit Focus';
+                updateStatus('Focus mode enabled');
+            } else {
+                focusBtn.textContent = '🎯 Focus';
+                updateStatus('Focus mode disabled');
+            }
         }
 
         // Font Size
@@ -852,6 +914,9 @@
                     document.getElementById('emojiPicker').style.display = 'none';
                     document.getElementById('searchReplace').style.display = 'none';
                     document.getElementById('outline').style.display = 'none';
+                    if (isDistractionFree) {
+                        toggleDistractionFree();
+                    }
                 }
             });
         }
