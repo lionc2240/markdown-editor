@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Markdown Editor Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
+    <style>
+        /* [Giữ nguyên CSS cơ bản từ phiên bản trước] */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f5f5f5; color: #333; height: 100vh; overflow: hidden; }
+        .container { display: flex; height: 100vh; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .sidebar { width: 280px; background: #2c3e50; border-right: 1px solid #34495e; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; color: white; }
+        .sidebar h2 { font-size: 18px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .btn { background: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        .btn:hover { background: #2980b9; transform: translateY(-1px); }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #229954; }
+        .file-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+        .file-item { padding: 10px; margin-bottom: 5px; background: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; transition: all 0.3s; display: flex; justify-content: space-between; align-items: center; }
+        .file-item:hover { background: rgba(255,255,255,0.2); transform: translateX(3px); }
+        .file-item.active { background: #3498db; }
+        .file-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-item-delete { background: rgba(231, 76, 60, 0.5); color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 12px; transition: all 0.3s; }
+        .file-item-delete:hover { background: rgba(231, 76, 60, 0.8); }
+        .main-content { flex: 1; display: flex; flex-direction: column; background: white; }
+        .toolbar { background: #ecf0f1; padding: 8px 15px; border-bottom: 1px solid #bdc3c7; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .toolbar input[type="text"] { flex: 1; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 14px; min-width: 150px; }
+        .toolbar-group { display: flex; gap: 8px; align-items: center; }
+        .toolbar-section { display: flex; gap: 5px; border-right: 1px solid #bdc3c7; padding-right: 10px; }
+        .toolbar-section:last-child { border-right: none; }
+        .editor-container { flex: 1; display: flex; overflow: hidden; position: relative; }
+        .editor-pane, .preview-pane { flex: 1; padding: 20px; overflow-y: auto; position: relative; }
+        .editor-pane { background: #fff; border-right: 1px solid #bdc3c7; }
+        .editor-pane textarea { width: 100%; height: 100%; background: white; border: none; padding: 15px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.6; resize: none; color: #333; }
+        .editor-pane textarea:focus { outline: none; }
+        .preview-pane { background: #f9f9f9; }
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #7f8c8d; }
+        .empty-state h3 { margin-bottom: 10px; color: #2c3e50; }
+        .status-bar { background: #34495e; padding: 5px 15px; color: white; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-header { margin-bottom: 15px; font-size: 18px; font-weight: bold; color: #2c3e50; }
+        .modal-body { margin-bottom: 15px; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
+        .floating-toolbar { position: absolute; top: 10%; right: 10px; background: #fff; border: 1px solid #bdc3c7; border-radius: 4px; padding: 5px; display: none; flex-direction: column; gap: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 100; }
+
+        /* Dark Mode */
+        body.dark-mode { background: #2c3e50; color: #ecf0f1; }
+        body.dark-mode .main-content { background: #34495e; }
+        body.dark-mode .editor-pane { background: #2c3e50; border-right: 1px solid #34495e; }
+        body.dark-mode .editor-pane textarea { background: #2c3e50; color: #ecf0f1; }
+        body.dark-mode .preview-pane { background: #34495e; color: #ecf0f1; }
+        body.dark-mode .toolbar { background: #2c3e50; border-bottom: 1px solid #34495e; }
+        body.dark-mode .floating-toolbar { background: #2c3e50; border: 1px solid #34495e; }
+        body.dark-mode .empty-state { color: #bdc3c7; }
+        body.dark-mode .empty-state h3 { color: #ecf0f1; }
+
+        /* Distraction Free Mode */
+        body.distraction-free .sidebar { display: none; }
+        body.distraction-free .toolbar { display: none; }
+        body.distraction-free .status-bar { display: none; }
+        body.distraction-free .container { height: 100vh; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* Syntax Highlighting in Editor */
+        .syntax-keyword { color: #e74c3c; font-weight: bold; }
+        .syntax-header { color: #3498db; }
+        .syntax-link { color: #27ae60; }
+        .syntax-code { background: rgba(52, 152, 219, 0.1); color: #c0392b; }
+        .syntax-list { color: #8e44ad; }
+
+        /* Preview Styles */
+        .preview-pane h1, .preview-pane h2, .preview-pane h3 { margin-top: 20px; margin-bottom: 10px; color: #2c3e50; }
+        .preview-pane h1 { border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+        .preview-pane h2 { border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
+        .preview-pane code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; color: #c0392b; }
+        .preview-pane pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; border: 1px solid #bdc3c7; }
+        .preview-pane blockquote { border-left: 4px solid #3498db; padding-left: 15px; margin: 15px 0; color: #7f8c8d; font-style: italic; }
+        .preview-pane a { color: #3498db; text-decoration: none; }
+        .preview-pane a:hover { text-decoration: underline; }
+        .preview-pane ul, .preview-pane ol { margin-left: 25px; margin-bottom: 15px; }
+        .preview-pane li { margin-bottom: 8px; }
+        .preview-pane table { border-collapse: collapse; width: 100%; margin-bottom: 15px; border: 1px solid #bdc3c7; }
+        .preview-pane th, .preview-pane td { border: 1px solid #bdc3c7; padding: 10px; text-align: left; }
+        .preview-pane th { background: #ecf0f1; }
+        .preview-pane img { max-width: 100%; height: auto; border-radius: 5px; }
+        body.dark-mode .preview-pane h1, body.dark-mode .preview-pane h2, body.dark-mode .preview-pane h3 { color: #ecf0f1; }
+        body.dark-mode .preview-pane code { background: rgba(52, 152, 219, 0.2); color: #e74c3c; }
+        body.dark-mode .preview-pane pre { background: #2c3e50; border: 1px solid #34495e; }
+        body.dark-mode .preview-pane blockquote { border-left: 4px solid #3498db; color: #bdc3c7; }
+        body.dark-mode .preview-pane a { color: #3498db; }
+        body.dark-mode .preview-pane th { background: #2c3e50; }
+        body.dark-mode .preview-pane table, body.dark-mode .preview-pane th, body.dark-mode .preview-pane td { border: 1px solid #34495e; }
+
+        /* Table Editor */
+        .table-editor { background: white; border: 1px solid #bdc3c7; border-radius: 4px; padding: 15px; margin-top: 10px; }
+        .table-editor input { padding: 5px; border: 1px solid #bdc3c7; border-radius: 3px; margin: 2px; }
+        .table-editor button { padding: 5px 10px; margin: 2px; }
+
+        /* Emoji Picker */
+        .emoji-picker { position: absolute; background: white; border: 1px solid #bdc3c7; border-radius: 4px; padding: 10px; max-width: 300px; max-height: 200px; overflow-y: auto; display: none; grid-template-columns: repeat(10, 1fr); gap: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 200; }
+        .emoji-picker span { cursor: pointer; font-size: 18px; padding: 5px; text-align: center; }
+        .emoji-picker span:hover { background: #ecf0f1; border-radius: 3px; }
+
+        /* Search and Replace */
+        .search-replace { position: absolute; top: 50px; right: 20px; background: white; border: 1px solid #bdc3c7; border-radius: 4px; padding: 10px; display: none; flex-direction: column; gap: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 150; }
+        .search-replace input { padding: 5px; border: 1px solid #bdc3c7; border-radius: 3px; }
+
+        /* Outline */
+        .outline { position: fixed; left: 300px; top: 80px; background: white; border: 1px solid #bdc3c7; border-radius: 4px; padding: 10px; max-width: 200px; max-height: 400px; overflow-y: auto; display: none; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 100; }
+        .outline h4 { margin-bottom: 10px; font-size: 14px; color: #2c3e50; }
+        .outline-item { padding: 5px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #ecf0f1; }
+        .outline-item:hover { background: #ecf0f1; }
+        .outline-h1 { font-weight: bold; }
+        .outline-h2 { padding-left: 10px; }
+        .outline-h3 { padding-left: 20px; }
+
+        /* Responsive */
+        @media (max-width: 768px) { .sidebar { width: 100%; position: absolute; z-index: 100; transform: translateX(-100%); transition: transform 0.3s; } .sidebar.open { transform: translateX(0); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>
+                <span>📚 Notes</span>
+                <button class="btn" onclick="createNewNote()">+ New</button>
+            </h2>
+            <div class="file-list" id="fileList"></div>
+            <div style="margin-top: 10px;">
+                <button class="btn btn-success" onclick="importNote()">📥 Import</button>
+                <button class="btn" onclick="exportAllNotes()">📤 Export All</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="toolbar">
+                <div class="toolbar-section">
+                    <select id="fontSize" onchange="changeFontSize()">
+                        <option value="12px">12px</option>
+                        <option value="14px" selected>14px</option>
+                        <option value="16px">16px</option>
+                        <option value="18px">18px</option>
+                    </select>
+                    <button class="btn" onclick="toggleDarkMode()">🌓 Dark</button>
+                    <button class="btn" onclick="toggleDistractionFree()">🎯 Focus</button>
+                    <button class="btn" onclick="toggleOutline()">📑 Outline</button>
+                </div>
+                <div class="toolbar-section">
+                    <button class="btn" onclick="formatText('bold')" title="Ctrl+B">Bold</button>
+                    <button class="btn" onclick="formatText('italic')" title="Ctrl+I">Italic</button>
+                    <button class="btn" onclick="formatText('code')" title="Ctrl+`">Code</button>
+                    <button class="btn" onclick="formatText('link')" title="Ctrl+K">Link</button>
+                    <button class="btn" onclick="formatText('image')" title="Ctrl+Shift+I">Image</button>
+                    <button class="btn" onclick="insertTable()" title="Ctrl+T">Table</button>
+                    <button class="btn" onclick="insertList('ul')" title="Ctrl+Shift+L">List</button>
+                    <button class="btn" onclick="insertEmoji()">😊 Emoji</button>
+                </div>
+                <div class="toolbar-section">
+                    <input type="text" id="noteTitle" placeholder="Tiêu đề note..." oninput="updateNoteTitle()">
+                </div>
+                <div class="toolbar-section">
+                    <button class="btn" onclick="toggleSearchReplace()">🔍 Search</button>
+                    <button class="btn btn-danger" onclick="deleteCurrentNote()" id="deleteBtn">🗑️ Delete</button>
+                    <button class="btn" onclick="togglePreview()">👁️ Preview</button>
+                    <button class="btn" onclick="downloadNote()">💾 Download</button>
+                    <button class="btn" onclick="exportHTML()">🌐 HTML</button>
+                    <button class="btn" onclick="exportPDF()">📄 PDF</button>
+                </div>
+            </div>
+
+            <div class="editor-container" id="editorContainer">
+                <div class="editor-pane">
+                    <textarea id="editor" placeholder="Nhập nội dung markdown..."></textarea>
+                </div>
+                <div class="preview-pane" id="previewPane">
+                    <div id="preview"></div>
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <span id="statusText">Ready</span>
+                <span id="wordCount">0 từ | 0 ký tự | 0 dòng</span>
+                <span id="currentTime"></span>
+            </div>
+
+            <!-- Floating Elements -->
+            <div class="floating-toolbar" id="floatingToolbar"></div>
+            <div class="emoji-picker" id="emojiPicker"></div>
+            <div class="search-replace" id="searchReplace">
+                <input type="text" id="searchInput" placeholder="Tìm kiếm">
+                <input type="text" id="replaceInput" placeholder="Thay thế">
+                <button class="btn" onclick="performReplace()">Replace All</button>
+                <button class="btn" onclick="toggleSearchReplace()">Đóng</button>
+            </div>
+            <div class="outline" id="outline"></div>
+        </main>
+    </div>
+
+    <!-- Table Editor Modal -->
+    <div class="modal" id="tableModal">
+        <div class="modal-content">
+            <div class="modal-header">Table Generator</div>
+            <div class="modal-body">
+                <label>Rows: <input type="number" id="tableRows" value="3" min="1" max="20"></label>
+                <label>Columns: <input type="number" id="tableCols" value="3" min="1" max="10"></label>
+                <div id="tablePreview"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeTableModal()">Cancel</button>
+                <button class="btn btn-success" onclick="insertGeneratedTable()">Insert Table</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal" id="importModal">
+        <div class="modal-content">
+            <div class="modal-header">Import Markdown File</div>
+            <div class="modal-body">
+                <input type="file" id="fileInput" accept=".md,.txt">
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-success" onclick="confirmImport()">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let notes = JSON.parse(localStorage.getItem('mdnotes_pro') || '[]');
+        let currentNoteId = null;
+        let showPreview = true;
+        let isDarkMode = false;
+        let isDistractionFree = false;
+        let showOutline = false;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            renderFileList();
+            setupAutoSave();
+            setupWordCount();
+            setupClock();
+            setupKeyboardShortcuts();
+            setupScrollSync();
+            loadEmojis();
+            
+            marked.setOptions({
+                gfm: true,
+                breaks: true,
+                headerIds: true,
+                mangle: false,
+                smartLists: true,
+                smartypants: true,
+                highlight: function(code, lang) {
+                    // Basic syntax highlighting
+                    return `<code class="language-${lang}">${escapeHtml(code)}</code>`;
+                }
+            });
+        });
+
+        // Core Functions
+        function renderFileList() {
+            const fileList = document.getElementById('fileList');
+            if (notes.length === 0) {
+                fileList.innerHTML = '<div class="empty-state">No notes found. Create a new one!</div>';
+                return;
+            }
+            
+            fileList.innerHTML = notes.map(note => `
+                <div class="file-item ${note.id === currentNoteId ? 'active' : ''}" onclick="selectNote('${note.id}')">
+                    <span class="file-item-title">${note.title || 'Untitled'}</span>
+                    <button class="file-item-delete" onclick="deleteNote(event, '${note.id}')">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function createNewNote() {
+            const newNote = {
+                id: Date.now().toString(),
+                title: 'Untitled',
+                content: '',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            notes.unshift(newNote);
+            saveNotes();
+            currentNoteId = newNote.id;
+            renderFileList();
+            loadCurrentNote();
+            updateStatus('New note created');
+        }
+
+        function selectNote(noteId) {
+            currentNoteId = noteId;
+            loadCurrentNote();
+            renderFileList();
+        }
+
+        function loadCurrentNote() {
+            const note = notes.find(n => n.id === currentNoteId);
+            if (!note) return;
+            
+            document.getElementById('noteTitle').value = note.title;
+            document.getElementById('editor').value = note.content;
+            updatePreview();
+            updateWordCount();
+            updateOutline();
+            updateStatus(`Loaded: ${note.title}`);
+        }
+
+        function updateNoteTitle() {
+            if (!currentNoteId) return;
+            
+            const note = notes.find(n => n.id === currentNoteId);
+            if (note) {
+                note.title = document.getElementById('noteTitle').value || 'Untitled';
+                note.updatedAt = new Date().toISOString();
+                saveNotes();
+                renderFileList();
+                updateStatus('Title updated');
+            }
+        }
+
+        function deleteCurrentNote() {
+            if (!currentNoteId) return;
+            deleteNote(null, currentNoteId);
+        }
+
+        function deleteNote(event, noteId) {
+            if (event) event.stopPropagation();
+            
+            if (!confirm('Bạn có chắc muốn xóa note này?')) return;
+            
+            notes = notes.filter(n => n.id !== noteId);
+            
+            if (currentNoteId === noteId) {
+                currentNoteId = null;
+                document.getElementById('noteTitle').value = '';
+                document.getElementById('editor').value = '';
+                updatePreview();
+                updateOutline();
+            }
+            
+            saveNotes();
+            renderFileList();
+            updateWordCount();
+            updateStatus('Note deleted');
+        }
+
+        function saveCurrentNote() {
+            if (!currentNoteId) return;
+            
+            const note = notes.find(n => n.id === currentNoteId);
+            if (note) {
+                note.content = document.getElementById('editor').value;
+                note.updatedAt = new Date().toISOString();
+                saveNotes();
+                updateStatus('Auto-saved');
+            }
+        }
+
+        function saveNotes() {
+            localStorage.setItem('mdnotes_pro', JSON.stringify(notes));
+        }
+
+        // Auto Save & Real-time Preview
+        function setupAutoSave() {
+            const editor = document.getElementById('editor');
+            let timeout;
+            
+            editor.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    saveCurrentNote();
+                    updatePreview();
+                    updateWordCount();
+                    updateOutline();
+                }, 800);
+            });
+        }
+
+        function updatePreview() {
+            if (!showPreview) return;
+            
+            const content = document.getElementById('editor').value;
+            const preview = document.getElementById('preview');
+            
+            if (content.trim()) {
+                const rendered = marked.parse(content);
+                preview.innerHTML = DOMPurify.sanitize(rendered);
+            } else {
+                preview.innerHTML = '<div class="empty-state"><h3>Preview</h3><p>Nội dung markdown sẽ hiển thị ở đây</p></div>';
+            }
+        }
+
+        function togglePreview() {
+            showPreview = !showPreview;
+            const previewPane = document.getElementById('previewPane');
+            if (showPreview) {
+                previewPane.style.display = 'block';
+                updatePreview();
+            } else {
+                previewPane.style.display = 'none';
+            }
+        }
+
+        // Word Count & Statistics
+        function setupWordCount() {
+            const editor = document.getElementById('editor');
+            editor.addEventListener('input', updateWordCount);
+        }
+
+        function updateWordCount() {
+            const content = document.getElementById('editor').value;
+            const words = content.trim().split(/\s+/).filter(w => w.length > 0).length;
+            const chars = content.length;
+            const lines = content.split('\n').length;
+            document.getElementById('wordCount').textContent = `${words} từ | ${chars} ký tự | ${lines} dòng`;
+        }
+
+        // Clock
+        function setupClock() {
+            setInterval(() => {
+                document.getElementById('currentTime').textContent = new Date().toLocaleTimeString('vi-VN');
+            }, 1000);
+        }
+
+        // Formatting Toolbar
+        function formatText(type) {
+            const editor = document.getElementById('editor');
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const selectedText = editor.value.substring(start, end);
+            let replacement = selectedText;
+
+            switch(type) {
+                case 'bold':
+                    replacement = `**${selectedText || 'bold text'}**`;
+                    break;
+                case 'italic':
+                    replacement = `*${selectedText || 'italic text'}*`;
+                    break;
+                case 'code':
+                    replacement = selectedText.includes('\n') ? `\`\`\`\n${selectedText || 'code'}\n\`\`\`` : `\`${selectedText || 'code'}\``;
+                    break;
+                case 'link':
+                    replacement = `[${selectedText || 'link text'}](url)`;
+                    break;
+                case 'image':
+                    replacement = `![${selectedText || 'alt text'}](image-url)`;
+                    break;
+                case 'header1':
+                    replacement = `# ${selectedText || 'Header 1'}`;
+                    break;
+                case 'header2':
+                    replacement = `## ${selectedText || 'Header 2'}`;
+                    break;
+                case 'header3':
+                    replacement = `### ${selectedText || 'Header 3'}`;
+                    break;
+            }
+
+            editor.value = editor.value.substring(0, start) + replacement + editor.value.substring(end);
+            editor.focus();
+            editor.setSelectionRange(start + replacement.length, start + replacement.length);
+            saveCurrentNote();
+            updatePreview();
+            updateWordCount();
+        }
+
+        function insertList(type) {
+            const editor = document.getElementById('editor');
+            const start = editor.selectionStart;
+            const listItem = type === 'ul' ? '- Item' : '1. Item';
+            
+            editor.value = editor.value.substring(0, start) + `\n${listItem}\n` + editor.value.substring(start);
+            editor.focus();
+            saveCurrentNote();
+            updatePreview();
+            updateWordCount();
+        }
+
+        // Table Editor
+        function insertTable() {
+            document.getElementById('tableModal').style.display = 'flex';
+            generateTablePreview();
+        }
+
+        function closeTableModal() {
+            document.getElementById('tableModal').style.display = 'none';
+        }
+
+        function generateTablePreview() {
+            const rows = parseInt(document.getElementById('tableRows').value);
+            const cols = parseInt(document.getElementById('tableCols').value);
+            const preview = document.getElementById('tablePreview');
+            
+            let html = '<div class="table-editor">';
+            for(let i = 0; i < rows; i++) {
+                for(let j = 0; j < cols; j++) {
+                    html += `<input type="text" placeholder="R${i+1}C${j+1}" id="cell-${i}-${j}">`;
+                }
+                html += '<br>';
+            }
+            html += '</div>';
+            preview.innerHTML = html;
+        }
+
+        function insertGeneratedTable() {
+            const rows = parseInt(document.getElementById('tableRows').value);
+            const cols = parseInt(document.getElementById('tableCols').value);
+            let table = '\n\n';
+            
+            // Header
+            table += '| ' + Array(cols).fill('Header').join(' | ') + ' |\n';
+            table += '| ' + Array(cols).fill('---').join(' | ') + ' |\n';
+            
+            // Data
+            for(let i = 0; i < rows; i++) {
+                const cells = [];
+                for(let j = 0; j < cols; j++) {
+                    const cell = document.getElementById(`cell-${i}-${j}`)?.value || '';
+                    cells.push(cell || `R${i+1}C${j+1}`);
+                }
+                table += '| ' + cells.join(' | ') + ' |\n';
+            }
+            
+            const editor = document.getElementById('editor');
+            const start = editor.selectionStart;
+            editor.value = editor.value.substring(0, start) + table + editor.value.substring(start);
+            editor.focus();
+            closeTableModal();
+            saveCurrentNote();
+            updatePreview();
+            updateWordCount();
+        }
+
+        // Emoji Picker
+        function loadEmojis() {
+            const emojis = ['😀','😁','😂','😊','😉','😍','😘','😎','🤩','🤔','👍','👎','👏','🙌','🔥','💯','❤️','💙','🌟','✨','✅','❌','⚠️','📌','📍','🔍','🎯','🚀','💡','📝'];
+            const picker = document.getElementById('emojiPicker');
+            picker.innerHTML = emojis.map(emoji => `<span onclick="insertEmojiText('${emoji}')">${emoji}</span>`).join('');
+        }
+
+        function insertEmoji() {
+            const picker = document.getElementById('emojiPicker');
+            picker.style.display = picker.style.display === 'grid' ? 'none' : 'grid';
+        }
+
+        function insertEmojiText(emoji) {
+            const editor = document.getElementById('editor');
+            const start = editor.selectionStart;
+            editor.value = editor.value.substring(0, start) + emoji + editor.value.substring(start);
+            editor.focus();
+            document.getElementById('emojiPicker').style.display = 'none';
+            saveCurrentNote();
+            updatePreview();
+            updateWordCount();
+        }
+
+        // Search and Replace
+        function toggleSearchReplace() {
+            const search = document.getElementById('searchReplace');
+            search.style.display = search.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function performReplace() {
+            const search = document.getElementById('searchInput').value;
+            const replace = document.getElementById('replaceInput').value;
+            const editor = document.getElementById('editor');
+            
+            if (!search) return;
+            
+            const regex = new RegExp(search, 'g');
+            const count = (editor.value.match(regex) || []).length;
+            
+            editor.value = editor.value.replace(regex, replace);
+            saveCurrentNote();
+            updatePreview();
+            updateWordCount();
+            updateStatus(`Replaced ${count} occurrences`);
+            toggleSearchReplace();
+        }
+
+        // Document Outline
+        function toggleOutline() {
+            showOutline = !showOutline;
+            const outline = document.getElementById('outline');
+            outline.style.display = showOutline ? 'block' : 'none';
+            if (showOutline) updateOutline();
+        }
+
+        function updateOutline() {
+            const content = document.getElementById('editor').value;
+            const outline = document.getElementById('outline');
+            const headings = content.match(/^#{1,6}\s+.+$/gm) || [];
+            
+            if (headings.length === 0) {
+                outline.innerHTML = '<h4>📑 Outline</h4><div class="outline-item">No headings found</div>';
+                return;
+            }
+            
+            let html = '<h4>📑 Outline</h4>';
+            headings.forEach((heading, index) => {
+                const level = heading.match(/^#+/)[0].length;
+                const text = heading.replace(/^#+\s+/, '');
+                html += `<div class="outline-item outline-h${level}" onclick="jumpToLine(${index + 1})">${text}</div>`;
+            });
+            
+            outline.innerHTML = html;
+        }
+
+        function jumpToLine(lineNumber) {
+            const editor = document.getElementById('editor');
+            const lines = editor.value.split('\n');
+            let charCount = 0;
+            
+            for(let i = 0; i < lineNumber - 1; i++) {
+                charCount += lines[i].length + 1;
+            }
+            
+            editor.focus();
+            editor.setSelectionRange(charCount, charCount);
+        }
+
+        // Scroll Sync
+        function setupScrollSync() {
+            const editor = document.querySelector('.editor-pane');
+            const preview = document.querySelector('.preview-pane');
+            
+            editor.addEventListener('scroll', () => {
+                if (!showPreview) return;
+                const scrollPercent = editor.scrollTop / (editor.scrollHeight - editor.clientHeight);
+                preview.scrollTop = scrollPercent * (preview.scrollHeight - preview.clientHeight);
+            });
+        }
+
+        // UI Modes
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('dark-mode', isDarkMode);
+            updateStatus(isDarkMode ? 'Dark mode enabled' : 'Light mode enabled');
+        }
+
+        function toggleDistractionFree() {
+            isDistractionFree = !isDistractionFree;
+            document.body.classList.toggle('distraction-free', isDistractionFree);
+            updateStatus(isDistractionFree ? 'Focus mode enabled' : 'Focus mode disabled');
+        }
+
+        // Font Size
+        function changeFontSize() {
+            const size = document.getElementById('fontSize').value;
+            document.getElementById('editor').style.fontSize = size;
+            updateStatus(`Font size: ${size}`);
+        }
+
+        // Import/Export
+        function importNote() {
+            document.getElementById('importModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('importModal').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+        }
+
+        function confirmImport() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Vui lòng chọn một file');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const title = file.name.replace(/\.(md|txt)$/, '');
+                
+                const newNote = {
+                    id: Date.now().toString(),
+                    title: title,
+                    content: content,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                notes.unshift(newNote);
+                saveNotes();
+                currentNoteId = newNote.id;
+                renderFileList();
+                loadCurrentNote();
+                closeModal();
+                updateStatus('File imported successfully');
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function downloadNote() {
+            if (!currentNoteId) {
+                alert('Vui lòng chọn một note để download');
+                return;
+            }
+            
+            const note = notes.find(n => n.id === currentNoteId);
+            if (!note) return;
+            
+            const blob = new Blob([note.content], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${note.title}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+            updateStatus('Note downloaded as .md');
+        }
+
+        function exportHTML() {
+            if (!currentNoteId) {
+                alert('Vui lòng chọn một note để export');
+                return;
+            }
+            
+            const note = notes.find(n => n.id === currentNoteId);
+            if (!note) return;
+            
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${note.title}</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1, h2, h3 { color: #2c3e50; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+        pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        blockquote { border-left: 4px solid #3498db; padding-left: 15px; margin: 15px 0; color: #7f8c8d; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+        th, td { border: 1px solid #bdc3c7; padding: 10px; text-align: left; }
+        th { background: #ecf0f1; }
+        img { max-width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>${note.title}</h1>
+    <p><em>Created: ${new Date(note.createdAt).toLocaleString('vi-VN')}</em></p>
+    <hr>
+    ${marked.parse(note.content)}
+</body>
+</html>`;
+            
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${note.title}.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+            updateStatus('Note exported as HTML');
+        }
+
+        function exportPDF() {
+            if (!currentNoteId) {
+                alert('Vui lòng chọn một note để export');
+                return;
+            }
+            
+            const note = notes.find(n => n.id === currentNoteId);
+            if (!note) return;
+            
+            // Simple PDF generation using jsPDF (would need to include library)
+            alert('PDF export requires jsPDF library. Please add: <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');
+            updateStatus('PDF export ready - add jsPDF library');
+        }
+
+        function exportAllNotes() {
+            if (notes.length === 0) {
+                alert('Không có note nào để export');
+                return;
+            }
+            
+            const exportData = {
+                version: '2.0',
+                exportDate: new Date().toISOString(),
+                totalNotes: notes.length,
+                notes: notes
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `notes-backup-${new Date().getTime()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            updateStatus('All notes exported as JSON');
+        }
+
+        // Keyboard Shortcuts
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key) {
+                        case 's':
+                            e.preventDefault();
+                            saveCurrentNote();
+                            updateStatus('Saved');
+                            break;
+                        case 'n':
+                            e.preventDefault();
+                            createNewNote();
+                            break;
+                        case 'b':
+                            e.preventDefault();
+                            formatText('bold');
+                            break;
+                        case 'i':
+                            e.preventDefault();
+                            formatText('italic');
+                            break;
+                        case 'k':
+                            e.preventDefault();
+                            formatText('link');
+                            break;
+                        case 't':
+                            e.preventDefault();
+                            insertTable();
+                            break;
+                        case 'l':
+                            e.preventDefault();
+                            insertList('ul');
+                            break;
+                    }
+                }
+                
+                if (e.key === 'Escape') {
+                    document.getElementById('emojiPicker').style.display = 'none';
+                    document.getElementById('searchReplace').style.display = 'none';
+                    document.getElementById('outline').style.display = 'none';
+                }
+            });
+        }
+
+        // Status Update
+        function updateStatus(message) {
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = message;
+            
+            setTimeout(() => {
+                statusText.textContent = 'Ready';
+            }, 3000);
+        }
+
+        // Utility Functions
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>
